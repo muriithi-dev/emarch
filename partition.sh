@@ -45,7 +45,7 @@ SWAP_PART=2
 START=$END
 
 #########################
-# PART 3 - BOOT / ROOT-BTRFS
+# PART 3 - BOOT / HOME-BTRFS
 #########################
 END=$((START + BOOT_MIB))
 parted -s "$DISK" mkpart boot btrfs ${START}MiB ${END}MiB
@@ -53,10 +53,10 @@ BOOT_PART=3
 START=$END
 
 #########################
-# PART 4 - ROOT (REST)
+# PART 4 - HOME (REST)
 #########################
-parted -s "$DISK" mkpart root btrfs ${START}MiB 100%
-ROOT_PART=4
+parted -s "$DISK" mkpart home btrfs ${START}MiB 100%
+HOME_PART=4
 
 echo "Partitioning done"
 parted -s "$DISK" print
@@ -67,7 +67,7 @@ parted -s "$DISK" print
 echo "Formatting partitions..."
 
 # EFI (FAT32)
-mkfs.fat -F32 "${DISK}${EFI_PART}"
+mkfs.fat -F 32 "${DISK}${EFI_PART}"
 
 # SWAP
 mkswap "${DISK}${SWAP_PART}"
@@ -75,7 +75,7 @@ mkswap "${DISK}${SWAP_PART}"
 # BOOT (btrfs or ext4 depending on your choice)
 mkfs.btrfs -f "${DISK}${BOOT_PART}"
 
-# ROOT
-mkfs.btrfs -f "${DISK}${ROOT_PART}"
+# HOME
+mkfs.btrfs -f "${DISK}${HOME_PART}"
 
 echo "Formatting complete"
