@@ -7,32 +7,33 @@ set -Eeuo pipefail
 
 DISK="/dev/sda"
 
-EFI_SIZE="1GiB"
-SWAP_SIZE="2GiB"
+EFI_SIZE=1024      # MiB
+SWAP_SIZE=2048     # MiB
+ROOT_START=$((EFI_SIZE + SWAP_SIZE))
 
 LUKS_NAME="cryptroot"
 MAPPER_ROOT="/dev/mapper/cryptroot"
 
 ############################
-# PARTITIONING (parted)
+# PARTITIONING (SAFE + EXACT)
 ############################
 
-echo "Creating GPT partitions on $DISK..."
+echo "Wiping and creating GPT..."
 
 parted -s "$DISK" mklabel gpt
 
-# EFI partition
-parted -s "$DISK" mkpart ESP fat32 1MiB "$EFI_SIZE"
+# EFI (1 MiB → 1024 MiB)
+parted -s "$DISK" mkpart ESP fat32 1MiB ${EFI_SIZE}MiB
 parted -s "$DISK" set 1 esp on
 
-# Swap partition
-parted -s "$DISK" mkpart swap linux-swap "$EFI_SIZE" "$SWAP_SIZE"
+# SWAP (1024 → 3072 MiB)
+parted -s "$DISK" mkpart swap linux-swap ${EFI_SIZE}MiB ${ROOT_START}MiB
 
-# Root partition (rest of disk)
-parted -s "$DISK" mkpart luks ext4 "$SWAP_SIZE" 100%
+# ROOT (rest)
+parted -s "$DISK" mkpart luks ${ROOT_START}MiB 100%
 
 ############################
-# PARTITION PREFIX HANDLING
+# DETECT PARTITIONS
 ############################
 
 if [[ "$DISK" =~ nvme|mmcblk ]]; then
@@ -49,30 +50,36 @@ ROOT_PART="${DISK}${P}3"
 # FORMAT EFI
 ############################
 
-echo "Formatting EFI..."
 mkfs.fat -F32 "$EFI_PART"
 
 ############################
-# LUKS SETUP
+# LUKS
 ############################
 
-echo "Setting up LUKS..."
-cryptsetup luksFormat -q "$ROOT_PART"
+echo "Creating LUKS..."
+
+cryptsetup luksFormat "$ROOT_PART"
+
+echo "Opening LUKS..."
+
 cryptsetup open "$ROOT_PART" "$LUKS_NAME"
 
-# Ensure device is ready
 udevadm settle
 
+# HARD CHECK
 if [[ ! -b "$MAPPER_ROOT" ]]; then
-  echo "ERROR: LUKS mapping failed"
+  echo "❌ LUKS mapping failed"
+  echo "Debug:"
+  lsblk
+  cryptsetup status "$LUKS_NAME" || true
+  ls -l /dev/mapper
   exit 1
 fi
 
 ############################
-# BTRFS SETUP
+# BTRFS
 ############################
 
-echo "Creating Btrfs filesystem..."
 mkfs.btrfs -f -L "arch_root" "$MAPPER_ROOT"
 
 mount "$MAPPER_ROOT" /mnt
@@ -84,10 +91,8 @@ btrfs subvolume create /mnt/@snapshots
 umount /mnt
 
 ############################
-# MOUNT SUBVOLUMES
+# MOUNTS
 ############################
-
-echo "Mounting Btrfs subvolumes..."
 
 mount -o subvol=@,compress=zstd "$MAPPER_ROOT" /mnt
 
@@ -102,7 +107,6 @@ mount "$EFI_PART" /mnt/boot
 # SWAP
 ############################
 
-echo "Setting up swap..."
 mkswap "$SWAP_PART"
 swapon "$SWAP_PART"
 
@@ -110,7 +114,6 @@ swapon "$SWAP_PART"
 # FSTAB
 ############################
 
-echo "Generating fstab..."
 genfstab -U /mnt >> /mnt/etc/fstab
 
-echo "DONE: Base system mounted at /mnt"
+echo "DONE"
