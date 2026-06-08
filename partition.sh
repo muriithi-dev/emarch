@@ -22,8 +22,11 @@ parted -s "$DISK" set 1 esp on
 # 2) Swap partition (2GiB)
 parted -s "$DISK" mkpart swap linux-swap 1025MiB 3073MiB
 
-# 3) Root partition (rest of disk)
-parted -s "$DISK" mkpart root ext4 3073MiB 100%
+# 3) Boot partition (2GiB)
+parted -s "$DISK" mkpart root btrfs 1025MiB 3073MiB
+
+# 4) Root partition (rest of disk)
+parted -s "$DISK" mkpart root btrfs 3073MiB 100%
 
 echo "Partitions created successfully"
 fdisk -l
@@ -37,5 +40,6 @@ echo "Formating partitions"
 mkfs.fat -F 32 "$DISK"1
 mkswap "$DISK"2
 mkfs.btrfs "$DISK"3
+mkfs.btrfs "$DISK"4
 
 echo "Formated successfully"
