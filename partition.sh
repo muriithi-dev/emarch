@@ -6,6 +6,8 @@ DISK="/dev/sda"
 ####################
 ### Partitioning ###
 ####################
+echo "Creating Partitions"
+
 # 1MiB → 1025MiB = ~1GiB EFI
 # 1025MiB → 3073MiB = +2GiB swap
 # 3073MiB → 100% = rest of disk
@@ -23,3 +25,5 @@ parted -s "$DISK" mkpart swap linux-swap 1025MiB 3073MiB
 # 3) Root partition (rest of disk)
 parted -s "$DISK" mkpart root ext4 3073MiB 100%
 
+echo "Partitions created successfully"
+lsblk -l
