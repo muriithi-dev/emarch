@@ -10,31 +10,12 @@ DISK="/dev/sda"
 EFI_SIZE="1GiB"
 SWAP_SIZE="6GiB"
 
-HOSTNAME="arch"
-
 LUKS_NAME="cryptroot"
 MAPPER_ROOT="/dev/mapper/cryptroot"
 
 ############################
-# SAFETY CHECK
-############################
-
-if [[ ! -b "$DISK" ]]; then
-  echo "ERROR: $DISK is not a block device"
-  exit 1
-fi
-
-echo "!!! THIS WILL WIPE $DISK !!!"
-read -rp "Are you sure you want to erase the disk? [y/N]: " confirm
-confirm="${confirm,,}"   # lowercase
-
-[[ "$confirm" == "y" || "$confirm" == "yes" ]] || exit 1
-
-############################
 # PARTITIONING (parted)
 ############################
-
-echo "Creating partitions..."
 
 parted -s "$DISK" mklabel gpt
 
@@ -46,7 +27,7 @@ parted -s "$DISK" mkpart swap linux-swap "$EFI_SIZE" "$((6 + 1))GiB"
 parted -s "$DISK" mkpart luks ext4 "$((6 + 1))GiB" 100%
 
 ############################
-# DETECT PARTITION PREFIX
+# PARTITION NAMES
 ############################
 
 if [[ "$DISK" =~ nvme|mmcblk ]]; then
@@ -60,25 +41,24 @@ SWAP_PART="${DISK}${P}2"
 ROOT_PART="${DISK}${P}3"
 
 ############################
-# EFI FORMAT
+# EFI
 ############################
 
 mkfs.fat -F32 "$EFI_PART"
 
 ############################
-# LUKS SETUP (root only)
+# LUKS (NO PROMPT MODE)
 ############################
 
-echo "Setting up LUKS..."
-cryptsetup luksFormat "$ROOT_PART"
-
+# WARNING: wipes without asking
+cryptsetup luksFormat -q "$ROOT_PART"
 cryptsetup open "$ROOT_PART" "$LUKS_NAME"
 
 ############################
-# BTRFS SETUP
+# BTRFS
 ############################
 
-mkfs.btrfs -L "arch_root" "$MAPPER_ROOT"
+mkfs.btrfs -f -L "arch_root" "$MAPPER_ROOT"
 
 mount "$MAPPER_ROOT" /mnt
 
@@ -89,7 +69,7 @@ btrfs subvolume create /mnt/@snapshots
 umount /mnt
 
 ############################
-# MOUNT SUBVOLUMES
+# MOUNTS
 ############################
 
 mount -o subvol=@,compress=zstd "$MAPPER_ROOT" /mnt
@@ -109,14 +89,7 @@ mkswap "$SWAP_PART"
 swapon "$SWAP_PART"
 
 ############################
-# FSTAB GENERATION
+# FSTAB
 ############################
 
 genfstab -U /mnt >> /mnt/etc/fstab
-
-############################
-# DONE (BASE SYSTEM READY)
-############################
-
-echo "Base system mounted at /mnt"
-echo "Continue with pacstrap + arch-chroot"
