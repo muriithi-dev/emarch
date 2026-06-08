@@ -4,42 +4,55 @@ set -e
 DISK="/dev/sda"
 
 #########################
-### Create partitions ###
+# SIZE VARIABLES (GB)
 #########################
-echo "Creating Partitions"
+EFI_SIZE_GB=1
+SWAP_SIZE_GB=2
+BOOT_SIZE_GB=2   # optional extra partition
+ROOT_SIZE_GB=0   # 0 = rest of disk
 
-# 1MiB → 1025MiB = ~1GiB EFI
-# 1025MiB → 3073MiB = +2GiB swap
-# 3073MiB → 100% = rest of disk
+#########################
+# CONVERT TO MIB
+#########################
+EFI_SIZE_MIB=$((EFI_SIZE_GB * 1024))
+SWAP_SIZE_MIB=$((SWAP_SIZE_GB * 1024))
+BOOT_SIZE_MIB=$((BOOT_SIZE_GB * 1024))
 
-# wipe + create GPT
+#########################
+# START/END TRACKING
+#########################
+START=1   # MiB (leave 1MiB offset for alignment)
+
+echo "Creating partitions on $DISK"
+
 parted -s "$DISK" mklabel gpt
 
-# 1) EFI partition (1GiB)
-parted -s "$DISK" mkpart ESP fat32 1MiB 1025MiB
+#########################
+# 1. EFI
+#########################
+END=$((START + EFI_SIZE_MIB))
+parted -s "$DISK" mkpart ESP fat32 ${START}MiB ${END}MiB
 parted -s "$DISK" set 1 esp on
+START=$END
 
-# 2) Swap partition (2GiB)
-parted -s "$DISK" mkpart swap linux-swap 1025MiB 3073MiB
+#########################
+# 2. SWAP
+#########################
+END=$((START + SWAP_SIZE_MIB))
+parted -s "$DISK" mkpart swap linux-swap ${START}MiB ${END}MiB
+START=$END
 
-# 3) Boot partition (2GiB)
-parted -s "$DISK" mkpart root btrfs 1025MiB 3073MiB
+#########################
+# 3. BOOT
+#########################
+END=$((START + BOOT_SIZE_MIB))
+parted -s "$DISK" mkpart boot btrfs ${START}MiB ${END}MiB
+START=$END
 
-# 4) Root partition (rest of disk)
-parted -s "$DISK" mkpart root btrfs 3073MiB 100%
+#########################
+# 4. ROOT (rest of disk)
+#########################
+parted -s "$DISK" mkpart root btrfs ${START}MiB 100%
 
-echo "Partitions created successfully"
-fdisk -l
-
-#############################
-### Format the partitions ###
-#############################
-
-echo "Formating partitions"
-
-mkfs.fat -F 32 "$DISK"1
-mkswap "$DISK"2
-mkfs.btrfs "$DISK"3
-mkfs.btrfs "$DISK"4
-
-echo "Formated successfully"
+echo "Partitioning complete"
+parted -s "$DISK" print
