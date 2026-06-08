@@ -8,7 +8,7 @@ set -Eeuo pipefail
 DISK="/dev/sda"
 
 EFI_SIZE="1GiB"
-SWAP_SIZE="6GiB"
+SWAP_SIZE="2GiB"
 
 LUKS_NAME="cryptroot"
 MAPPER_ROOT="/dev/mapper/cryptroot"
@@ -58,6 +58,7 @@ cryptsetup open "$ROOT_PART" "$LUKS_NAME"
 # BTRFS
 ############################
 
+mkdir "$MAPPER_ROOT"
 mkfs.btrfs -f -L "arch_root" "$MAPPER_ROOT"
 
 mount "$MAPPER_ROOT" /mnt
