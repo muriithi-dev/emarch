@@ -6,53 +6,76 @@ DISK="/dev/sda"
 #########################
 # SIZE VARIABLES (GB)
 #########################
-EFI_SIZE_GB=1
-SWAP_SIZE_GB=2
-BOOT_SIZE_GB=2   # optional extra partition
-ROOT_SIZE_GB=0   # 0 = rest of disk
+EFI_GB=1
+SWAP_GB=2
+BOOT_GB=2
 
 #########################
-# CONVERT TO MIB
+# CONVERT GB → MiB
 #########################
-EFI_SIZE_MIB=$((EFI_SIZE_GB * 1024))
-SWAP_SIZE_MIB=$((SWAP_SIZE_GB * 1024))
-BOOT_SIZE_MIB=$((BOOT_SIZE_GB * 1024))
+GB_TO_MIB=1024
+
+EFI_MIB=$((EFI_GB * GB_TO_MIB))
+SWAP_MIB=$((SWAP_GB * GB_TO_MIB))
+BOOT_MIB=$((BOOT_GB * GB_TO_MIB))
 
 #########################
-# START/END TRACKING
+# START POSITION
 #########################
-START=1   # MiB (leave 1MiB offset for alignment)
+START=1
 
-echo "Creating partitions on $DISK"
-
+echo "Creating GPT on $DISK"
 parted -s "$DISK" mklabel gpt
 
 #########################
-# 1. EFI
+# PART 1 - EFI
 #########################
-END=$((START + EFI_SIZE_MIB))
+END=$((START + EFI_MIB))
 parted -s "$DISK" mkpart ESP fat32 ${START}MiB ${END}MiB
 parted -s "$DISK" set 1 esp on
+EFI_PART=1
 START=$END
 
 #########################
-# 2. SWAP
+# PART 2 - SWAP
 #########################
-END=$((START + SWAP_SIZE_MIB))
+END=$((START + SWAP_MIB))
 parted -s "$DISK" mkpart swap linux-swap ${START}MiB ${END}MiB
+SWAP_PART=2
 START=$END
 
 #########################
-# 3. BOOT
+# PART 3 - BOOT / ROOT-BTRFS
 #########################
-END=$((START + BOOT_SIZE_MIB))
+END=$((START + BOOT_MIB))
 parted -s "$DISK" mkpart boot btrfs ${START}MiB ${END}MiB
+BOOT_PART=3
 START=$END
 
 #########################
-# 4. ROOT (rest of disk)
+# PART 4 - ROOT (REST)
 #########################
 parted -s "$DISK" mkpart root btrfs ${START}MiB 100%
+ROOT_PART=4
 
-echo "Partitioning complete"
+echo "Partitioning done"
 parted -s "$DISK" print
+
+#########################
+# FORMATTING
+#########################
+echo "Formatting partitions..."
+
+# EFI (FAT32)
+mkfs.fat -F32 "${DISK}${EFI_PART}"
+
+# SWAP
+mkswap "${DISK}${SWAP_PART}"
+
+# BOOT (btrfs or ext4 depending on your choice)
+mkfs.btrfs -f "${DISK}${BOOT_PART}"
+
+# ROOT
+mkfs.btrfs -f "${DISK}${ROOT_PART}"
+
+echo "Formatting complete"
