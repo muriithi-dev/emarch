@@ -25,8 +25,10 @@ if [[ ! -b "$DISK" ]]; then
 fi
 
 echo "!!! THIS WILL WIPE $DISK !!!"
-read -rp "Type YES to continue: " confirm
-[[ "$confirm" == "YES" ]] || exit 1
+read -rp "Are you sure you want to erase the disk? [y/N]: " confirm
+confirm="${confirm,,}"   # lowercase
+
+[[ "$confirm" == "y" || "$confirm" == "yes" ]] || exit 1
 
 ############################
 # PARTITIONING (parted)
