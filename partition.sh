@@ -79,3 +79,4 @@ mkfs.btrfs -f "${DISK}${BOOT_PART}"
 mkfs.btrfs -f "${DISK}${HOME_PART}"
 
 echo "Formatting complete"
+parted -s "$DISK" print
