@@ -32,6 +32,6 @@ n
 w
 EOF
 
-# mkfs.fat -F32 "${target}1"
-# mkswap "${target}2"
-# mkfs.ext4 "${target}3"
+mkfs.fat -F32 "${target}1"
+mkswap "${target}2"
+mkfs.ext4 "${target}3"
