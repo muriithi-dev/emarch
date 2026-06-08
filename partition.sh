@@ -8,7 +8,7 @@ DISK="/dev/sda"
 #########################
 EFI_GB=1
 SWAP_GB=2
-BOOT_GB=2
+ROOT_GB=2
 
 #########################
 # CONVERT GB → MiB
@@ -17,7 +17,7 @@ GB_TO_MIB=1024
 
 EFI_MIB=$((EFI_GB * GB_TO_MIB))
 SWAP_MIB=$((SWAP_GB * GB_TO_MIB))
-BOOT_MIB=$((BOOT_GB * GB_TO_MIB))
+ROOT_MIB=$((ROOT_GB * GB_TO_MIB))
 
 #########################
 # START POSITION
@@ -45,11 +45,11 @@ SWAP_PART=2
 START=$END
 
 #########################
-# PART 3 - BOOT / HOME-BTRFS
+# PART 3 - ROOT-BTRFS
 #########################
-END=$((START + BOOT_MIB))
-parted -s "$DISK" mkpart boot btrfs ${START}MiB ${END}MiB
-BOOT_PART=3
+END=$((START + ROOT_MIB))
+parted -s "$DISK" mkpart root btrfs ${START}MiB ${END}MiB
+ROOT_PART=3
 START=$END
 
 #########################
@@ -72,10 +72,29 @@ mkfs.fat -F 32 "${DISK}${EFI_PART}"
 # SWAP
 mkswap "${DISK}${SWAP_PART}"
 
-# BOOT (btrfs or ext4 depending on your choice)
-mkfs.btrfs -f "${DISK}${BOOT_PART}"
+# ROOT (btrfs or ext4 depending on your choice)
+mkfs.btrfs -f "${DISK}${ROOT_PART}"
 
 # HOME
 mkfs.btrfs -f "${DISK}${HOME_PART}"
 
 echo "Formatting complete"
+
+#########################
+# MOUNTING
+#########################
+
+# Root partition
+mount "${DISK}${ROOT_PART}" /mnt
+
+# HOME partition
+mkdir /mnt/home
+mount "${DISK}${HOME_PART}" /mnt/home
+
+# EFI partition
+mkdir /mnt/boot
+mount "${DISK}${EFI_PART}" /mnt/boot
+
+# Enable swap
+swapon "${DISK}${SWAP_PART}"
+
