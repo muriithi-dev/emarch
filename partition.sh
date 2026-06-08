@@ -3,98 +3,84 @@ set -e
 
 DISK="/dev/sda"
 
-#########################
-# SIZE VARIABLES (GB)
-#########################
 EFI_GB=1
 SWAP_GB=2
-ROOT_GB=2
 
-#########################
-# CONVERT GB → MiB
-#########################
 GB_TO_MIB=1024
 
 EFI_MIB=$((EFI_GB * GB_TO_MIB))
 SWAP_MIB=$((SWAP_GB * GB_TO_MIB))
-ROOT_MIB=$((ROOT_GB * GB_TO_MIB))
 
-#########################
-# START POSITION
-#########################
 START=1
 
-echo "Creating GPT on $DISK"
+#########################
+# PARTITIONING
+#########################
+
 parted -s "$DISK" mklabel gpt
 
-#########################
-# PART 1 - EFI
-#########################
+# EFI
 END=$((START + EFI_MIB))
 parted -s "$DISK" mkpart ESP fat32 ${START}MiB ${END}MiB
 parted -s "$DISK" set 1 esp on
 EFI_PART=1
 START=$END
 
-#########################
-# PART 2 - SWAP
-#########################
+# SWAP
 END=$((START + SWAP_MIB))
 parted -s "$DISK" mkpart swap linux-swap ${START}MiB ${END}MiB
 SWAP_PART=2
 START=$END
 
-#########################
-# PART 3 - ROOT-BTRFS
-#########################
-END=$((START + ROOT_MIB))
-parted -s "$DISK" mkpart root btrfs ${START}MiB ${END}MiB
+# ROOT (rest of disk)
+parted -s "$DISK" mkpart root btrfs ${START}MiB 100%
 ROOT_PART=3
-START=$END
 
 #########################
-# PART 4 - HOME (REST)
+# FORMAT
 #########################
-parted -s "$DISK" mkpart home btrfs ${START}MiB 100%
-HOME_PART=4
 
-echo "Partitioning done"
-parted -s "$DISK" print
-
-#########################
-# FORMATTING
-#########################
-echo "Formatting partitions..."
-
-# EFI (FAT32)
-mkfs.fat -F 32 "${DISK}${EFI_PART}"
-
-# SWAP
+mkfs.fat -F32 "${DISK}${EFI_PART}"
 mkswap "${DISK}${SWAP_PART}"
-
-# ROOT (btrfs or ext4 depending on your choice)
 mkfs.btrfs -f "${DISK}${ROOT_PART}"
 
-# HOME
-mkfs.btrfs -f "${DISK}${HOME_PART}"
-
-echo "Formatting complete"
-
 #########################
-# MOUNTING
+# CREATE SUBVOLUMES
 #########################
 
-# Root partition
 mount "${DISK}${ROOT_PART}" /mnt
 
-# HOME partition
-mkdir /mnt/home
-mount "${DISK}${HOME_PART}" /mnt/home
+btrfs subvolume create /mnt/@
+btrfs subvolume create /mnt/@home
+btrfs subvolume create /mnt/@snapshots
+btrfs subvolume create /mnt/@var_log
 
-# EFI partition
-mkdir /mnt/boot
+umount /mnt
+
+#########################
+# MOUNT
+#########################
+
+mount -o subvol=@,compress=zstd:3,noatime \
+    "${DISK}${ROOT_PART}" /mnt
+
+mkdir -p /mnt/{boot,home,.snapshots,var/log}
+
+mount -o subvol=@home,compress=zstd:3,noatime \
+    "${DISK}${ROOT_PART}" /mnt/home
+
+mount -o subvol=@snapshots,compress=zstd:3,noatime \
+    "${DISK}${ROOT_PART}" /mnt/.snapshots
+
+mount -o subvol=@var_log,compress=zstd:3,noatime \
+    "${DISK}${ROOT_PART}" /mnt/var/log
+
 mount "${DISK}${EFI_PART}" /mnt/boot
 
-# Enable swap
 swapon "${DISK}${SWAP_PART}"
+
+echo "Ready for pacstrap"
+
+
+
 
