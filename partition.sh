@@ -26,4 +26,4 @@ parted -s "$DISK" mkpart swap linux-swap 1025MiB 3073MiB
 parted -s "$DISK" mkpart root ext4 3073MiB 100%
 
 echo "Partitions created successfully"
-lsblk -l
+fdisk -l
