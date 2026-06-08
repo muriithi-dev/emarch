@@ -3,9 +3,9 @@ set -e
 
 DISK="/dev/sda"
 
-####################
-### Partitioning ###
-####################
+#########################
+### Create partitions ###
+#########################
 echo "Creating Partitions"
 
 # 1MiB → 1025MiB = ~1GiB EFI
@@ -27,3 +27,15 @@ parted -s "$DISK" mkpart root ext4 3073MiB 100%
 
 echo "Partitions created successfully"
 fdisk -l
+
+#############################
+### Format the partitions ###
+#############################
+
+echo "Formating partitions"
+
+mkfs.fat -F 32 "$DISK"1
+mkswap "$DISK"2
+mkfs.btrfs "$DISK"3
+
+echo "Formated successfully"
